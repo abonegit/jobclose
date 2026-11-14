@@ -1,4 +1,5 @@
 import express from "express";
+import path from "node:path";
 import { pool } from "./db.js";
 
 const app = express();
@@ -6,6 +7,10 @@ const port = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
+const frontendDirectory = path.resolve(
+  process.cwd(),
+  "frontend/dist"
+);
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
@@ -290,20 +295,23 @@ async function startServer() {
     await pool.query("SELECT 1");
     console.log("Connected to PostgreSQL");
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS customers (
-        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        name VARCHAR(150) NOT NULL,
-        email VARCHAR(254),
-        phone VARCHAR(50),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
+    app.use(express.static(frontendDirectory));
 
-    console.log("Customers table is ready");
+    app.use((req, res, next) => {
+      if (
+        req.method !== "GET" ||
+        req.path.startsWith("/api/") ||
+        req.path === "/health"
+      ) {
+        next();
+        return;
+      }
+
+      res.sendFile(path.join(frontendDirectory, "index.html"));
+    });
 
     app.listen(port, "0.0.0.0", () => {
-      console.log(`JobClose API is running on port ${port}`);
+      console.log(`JobClose application is running on port ${port}`);
     });
   } catch (error) {
     console.error("Failed to start JobClose API:", error);

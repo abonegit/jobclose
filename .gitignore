@@ -7,3 +7,12 @@ npm-debug.log*
 .DS_Store
 .vscode/
 *.pem
+!app/certs/global-bundle.pem
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log

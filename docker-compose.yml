@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: jobclose-db
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_DB: jobclose
+      POSTGRES_USER: jobclose
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}
+    volumes:
+      - jobclose_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobclose -d jobclose"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  jobclose_postgres_data:
