@@ -15,3 +15,9 @@ variable "domain_name" {
   type        = string
   default     = "abdulmalikisah.co.uk"
 }
+
+variable "github_repository" {
+  description = "GitHub repository allowed to deploy JobClose"
+  type        = string
+  default     = "abonegit/jobclose"
+}
