@@ -1,141 +1,52 @@
 
-name: Build and deploy JobClose
+name: Terraform Infrastructure Deployment
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/deploy.yml'
+  pull_request:
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
-  group: jobclose-production-deploy
+  group: jobclose-terraform
   cancel-in-progress: false
 
 env:
-  AWS_REGION: eu-west-2
-  ECR_REPOSITORY: jobclose
-  ECS_CLUSTER: jobclose-cluster
-  ECS_SERVICE: jobclose-service
-  ECS_TASK_DEFINITION: jobclose-app
-  CONTAINER_NAME: jobclose-app
+  TF_IN_AUTOMATION: true
 
 jobs:
-  deploy:
-    name: Build, push and deploy
+  terraform-validation:
+    name: Terraform Format and Validate
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
 
     steps:
       - name: Check out source code
         uses: actions/checkout@v4
-      - name: Diagnose GitHub OIDC identity
-        env:
-            ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-            ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-        run: |
-            TOKEN=$(curl -sS \
-              -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
-              | jq -r '.value')
 
-            echo "$TOKEN" | cut -d '.' -f2 | tr '_-' '/+' | base64 -d 2>/dev/null \
-             | jq '{iss, aud, sub, repository, ref}'
-
-      - name: Configure AWS credentials using OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          terraform_version: 1.16.4
 
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
 
-      - name: Build and push Docker image
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
-          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+      - name: Initialise Terraform without backend
+        run: terraform init -backend=false -input=false
 
-      - name: Download current ECS task definition
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition "$ECS_TASK_DEFINITION" \
-            --query taskDefinition \
-            --output json > task-definition.json
-
-      - name: Update task definition with new image
-        env:
-          IMAGE: ${{ steps.build-image.outputs.image }}
-        run: |
-          jq --arg IMAGE "$IMAGE" \
-            --arg CONTAINER "$CONTAINER_NAME" \
-            'del(
-              .taskDefinitionArn,
-              .revision,
-              .status,
-              .requiresAttributes,
-              .compatibilities,
-              .registeredAt,
-              .registeredBy,
-              .deregisteredAt,
-              .deregistrationProtection
-            )
-            | .containerDefinitions |= map(
-                if .name == $CONTAINER then .image = $IMAGE else . end
-              )' \
-            task-definition.json > new-task-definition.json
-
-          jq -e --arg CONTAINER "$CONTAINER_NAME" \
-            '.containerDefinitions | any(.name == $CONTAINER)' \
-            new-task-definition.json
-
-      - name: Register new task definition
-        id: register-task
-        run: |
-          TASK_DEFINITION_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://new-task-definition.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-
-          echo "task-definition-arn=$TASK_DEFINITION_ARN" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy to ECS
-        env:
-          TASK_DEFINITION_ARN: ${{ steps.register-task.outputs.task-definition-arn }}
-        run: |
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE" \
-            --task-definition "$TASK_DEFINITION_ARN"
-
-      - name: Wait for ECS service stability
-        run: |
-          aws ecs wait services-stable \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE"
-
-      - name: Check live application health
-        run: |
-          for attempt in {1..12}; do
-            if curl --fail --silent --show-error \
-              https://tm.abdulmalikisah.co.uk/health; then
-              echo
-              echo "Application health check passed."
-              exit 0
-            fi
-
-            echo "Health check attempt $attempt failed. Retrying..."
-            sleep 10
-          done
-
-          echo "Application health check failed."
-          exit 1
+      - name: Validate Terraform
+        run: terraform validate

@@ -1,0 +1,63 @@
+
+name: Terraform Infrastructure Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type DESTROY to confirm infrastructure destruction'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: jobclose-terraform
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-2
+  TF_IN_AUTOMATION: true
+
+jobs:
+  terraform-destroy:
+    name: Review and Destroy Infrastructure
+    runs-on: ubuntu-latest
+
+    environment: production-destroy
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Check destruction confirmation
+        if: ${{ inputs.confirmation != 'DESTROY' }}
+        run: |
+          echo "Confirmation did not match. Infrastructure will not be destroyed."
+          exit 1
+
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+
+      - name: Initialise Terraform
+        run: terraform init -input=false
+
+      - name: Generate destruction plan
+        run: terraform plan -destroy -input=false -out=destroy.tfplan
+
+      - name: Destroy infrastructure
+        run: terraform apply -input=false -auto-approve destroy.tfplan
