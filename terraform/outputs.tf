@@ -92,3 +92,8 @@ output "github_actions_role_arn" {
   description = "IAM role assumed by GitHub Actions through OIDC"
   value       = module.iam.github_actions_role_arn
 }
+
+output "github_actions_terraform_role_arn" {
+  description = "ARN of the dedicated GitHub Actions Terraform role"
+  value       = module.iam.github_actions_terraform_role_arn
+}
