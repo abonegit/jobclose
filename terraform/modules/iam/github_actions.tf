@@ -93,3 +93,55 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
     ]
   })
 }
+
+# Dedicated GitHub Actions role for Terraform infrastructure workflows.
+resource "aws_iam_role" "github_actions_terraform" {
+  name               = "${var.project_name}-github-terraform-role"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+
+  tags = {
+    Name = "${var.project_name}-github-terraform-role"
+  }
+}
+
+# Allow Terraform to access only its own S3 state and lock file.
+resource "aws_iam_role_policy" "github_actions_terraform_state" {
+  name = "${var.project_name}-github-terraform-state"
+  role = aws_iam_role.github_actions_terraform.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ListTerraformStateBucket"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = "arn:aws:s3:::jobclose-terraform-state"
+        Condition = {
+          StringLike = {
+            "s3:prefix" = ["jobclose/*"]
+          }
+        }
+      },
+      {
+        Sid    = "AccessTerraformState"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "arn:aws:s3:::jobclose-terraform-state/jobclose/terraform.tfstate"
+      },
+      {
+        Sid    = "ManageTerraformStateLock"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "arn:aws:s3:::jobclose-terraform-state/jobclose/terraform.tfstate.tflock"
+      }
+    ]
+  })
+}
