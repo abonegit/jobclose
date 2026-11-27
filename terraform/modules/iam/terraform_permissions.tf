@@ -302,6 +302,7 @@ resource "aws_iam_role_policy" "terraform_secrets" {
         Action = [
           "secretsmanager:DescribeSecret",
           "secretsmanager:GetSecretValue",
+          "secretsmanager:GetResourcePolicy",
           "secretsmanager:CreateSecret",
           "secretsmanager:PutSecretValue",
           "secretsmanager:DeleteSecret",
@@ -339,6 +340,7 @@ resource "aws_iam_role_policy" "terraform_alb" {
           "elasticloadbalancing:DescribeTargetGroups",
           "elasticloadbalancing:DescribeTargetGroupAttributes",
           "elasticloadbalancing:DescribeListeners",
+          "elasticloadbalancing:DescribeListenerAttributes",
           "elasticloadbalancing:DescribeRules",
           "elasticloadbalancing:DescribeTags"
         ]
