@@ -87,3 +87,6 @@ jobs:
 
       - name: Verify remote Terraform state
         run: terraform state list
+
+      - name: Check Terraform infrastructure plan
+        run: terraform plan -input=false -no-color  
