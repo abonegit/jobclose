@@ -419,6 +419,7 @@ resource "aws_iam_role_policy" "terraform_route53" {
           "route53:ListHostedZonesByName",
           "route53:GetHostedZone",
           "route53:ListResourceRecordSets",
+          "route53:ListTagsForResource",
           "route53:ListHostedZones",
           "route53:GetChange"
         ]
