@@ -12,7 +12,16 @@ on:
     paths:
       - 'terraform/**'
       - '.github/workflows/deploy.yml'
-  workflow_dispatch:
+    workflow_dispatch:
+    inputs:
+      confirm_apply:
+        description: 'Type APPLY to request an infrastructure deployment'
+        required: true
+        type: choice
+        options:
+          - NO
+          - APPLY
+        default: NO
 
 permissions:
   contents: read
@@ -88,5 +97,64 @@ jobs:
       - name: Verify remote Terraform state
         run: terraform state list
 
-      - name: Check Terraform infrastructure plan
-        run: terraform plan -input=false -no-color  
+            - name: Generate Terraform plan
+        run: terraform plan -input=false -no-color -out=tfplan
+
+      - name: Display Terraform plan
+        run: terraform show -no-color tfplan
+
+      - name: Save Terraform plan for approved deployment
+        if: github.event_name == 'workflow_dispatch' && inputs.confirm_apply == 'APPLY'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: terraform/tfplan
+          retention-days: 1
+
+        terraform-apply:
+    name: Apply Approved Terraform Plan
+    runs-on: ubuntu-latest
+
+    needs: terraform-backend-check
+
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_apply == 'APPLY'
+
+    environment: production
+
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+
+      - name: Download reviewed Terraform plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: terraform
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Initialise Terraform with remote S3 backend
+        run: terraform init -input=false
+
+      - name: Apply approved Terraform plan
+        run: terraform apply -input=false -auto-approve tfplan    
