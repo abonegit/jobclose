@@ -97,7 +97,7 @@ jobs:
       - name: Verify remote Terraform state
         run: terraform state list
 
-            - name: Generate Terraform plan
+      - name: Generate Terraform plan
         run: terraform plan -input=false -no-color -out=tfplan
 
       - name: Display Terraform plan
