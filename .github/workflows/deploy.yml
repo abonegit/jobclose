@@ -12,7 +12,7 @@ on:
     paths:
       - 'terraform/**'
       - '.github/workflows/deploy.yml'
-    workflow_dispatch:
+  workflow_dispatch:
     inputs:
       confirm_apply:
         description: 'Type APPLY to request an infrastructure deployment'
@@ -111,7 +111,7 @@ jobs:
           path: terraform/tfplan
           retention-days: 1
 
-        terraform-apply:
+  terraform-apply:
     name: Apply Approved Terraform Plan
     runs-on: ubuntu-latest
 
@@ -157,4 +157,4 @@ jobs:
         run: terraform init -input=false
 
       - name: Apply approved Terraform plan
-        run: terraform apply -input=false -auto-approve tfplan    
+        run: terraform apply -input=false -auto-approve tfplan
